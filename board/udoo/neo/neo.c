@@ -1046,7 +1046,7 @@ int do_udooinit(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 			modelfdt = "imx6sx-udoo-neo-basic";
 			break;
 		case UDOO_NEO_TYPE_BASIC_KS:
-			modelfdt = "imx6sx-udoo-neo-basicks";
+			modelfdt = "imx6sx-udoo-neo-basic";
 			break;
 		case UDOO_NEO_TYPE_EXTENDED:
 			modelfdt = "imx6sx-udoo-neo-extended";
@@ -1094,7 +1094,7 @@ int do_udooinit(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 		}
 	}
 	
-	char* dir_part = "dts";
+	char* dir_part = "dtbs";
 	char* customdtb = getenv("use_custom_dtb");
 	if (customdtb) {
 		customdtb = trim(customdtb);
@@ -1104,7 +1104,7 @@ int do_udooinit(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	}
 	
 	char fdt_file[100];
-	sprintf(fdt_file, "/boot/%s/%s%s%s.dtb", dir_part, modelfdt, video_part, m4_part);
+	sprintf(fdt_file, "/boot/%s/%s.dtb", dir_part, modelfdt);
 	
 	printf("Device Tree: %s\n", fdt_file);
 	setenv("fdt_file", fdt_file);

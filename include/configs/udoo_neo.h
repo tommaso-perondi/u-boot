@@ -54,7 +54,7 @@
 	"boot_fdt=try\0" \
 	"ip_dyn=yes\0" \
 	"mmcdev=0\0" \
-	"mmcpart=2\0" \
+	"mmcpart=1\0" \
 	"mmcrootfstype=ext4\0" \
 	"mmcroot=" CONFIG_MMCROOT " rootwait rw\0" \
 	"mmcautodetect=no\0" \
@@ -65,8 +65,8 @@
 		"fatload mmc ${mmcdev}:1 ${loadaddr} ${script};\0" \
 	"bootscript=echo Running bootscript from mmc ...; " \
 		"env import -t ${loadaddr} ${filesize};\0" \
-	"loadimage=ext2load mmc ${mmcdev}:${mmcpart} ${loadaddr} ${image}\0" \
-	"loadfdt=ext2load mmc ${mmcdev}:${mmcpart} ${fdt_addr} ${fdt_file}\0" \
+	"loadimage=ext4load mmc ${mmcdev}:${mmcpart} ${loadaddr} ${image}\0" \
+	"loadfdt=ext4load mmc ${mmcdev}:${mmcpart} ${fdt_addr} ${fdt_file}\0" \
 	"mmcboot=echo Booting from mmc ...; " \
 		"run mmcargs; " \
 		"if test ${boot_fdt} = yes || test ${boot_fdt} = try; then " \
@@ -178,10 +178,10 @@
 #define CONFIG_ENV_SIZE			SZ_8K
 #define CONFIG_ENV_IS_IN_MMC
 
-#define CONFIG_MMCROOT			"/dev/mmcblk0p2"  /* USDHC2 */
+#define CONFIG_MMCROOT			"/dev/mmcblk0p1"  /* USDHC */
 #define CONFIG_SYS_FSL_USDHC_NUM	2
 #if defined(CONFIG_ENV_IS_IN_MMC)
-#define CONFIG_SYS_MMC_ENV_DEV		0  /*USDHC2*/
+#define CONFIG_SYS_MMC_ENV_DEV		0  /*USDHC*/
 #endif
 
 #if defined(CONFIG_ANDROID_SUPPORT)
@@ -197,7 +197,7 @@
 	"fdt_loadaddr=0x85700000\0" \
 	"script=uEnv.txt\0" \
 	"loadbootscript=" \
-		"ext2load mmc 0:4 ${kernel_loadaddr} ${script};\0" \
+		"ext4load mmc 0:4 ${kernel_loadaddr} ${script};\0" \
 	"bootscript=echo Running bootscript from mmc ...; " \
 		"env import -t ${kernel_loadaddr} ${filesize};\0" \
 	"udoo_boot_init=" \
@@ -205,7 +205,7 @@
 			"run bootscript; " \
 		"fi; " \
 		"udooinit; " \
-		"ext2load mmc 0:5 ${fdt_loadaddr} ${fdt_file}; \0" \
+		"ext4load mmc 0:5 ${fdt_loadaddr} ${fdt_file}; \0" \
 	"splashpos=m,m\0" \
 	"fdt_high=0xffffffff\0" \
 	"initrd_high=0xffffffff\0" \
