@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2015 UDOO Team
  *
  * Author: Fabio Estevam <fabio.estevam@freescale.com>
  *
@@ -11,10 +12,12 @@
 #include <asm/arch/iomux.h>
 #include <malloc.h>
 #include <asm/arch/mx6-pins.h>
+#include <asm/arch/mxc_hdmi.h>
 #include <asm/errno.h>
 #include <asm/gpio.h>
 #include <asm/imx-common/iomux-v3.h>
 #include <asm/imx-common/sata.h>
+#include <asm/imx-common/video.h>
 #include <mmc.h>
 #include <fsl_esdhc.h>
 #include <asm/arch/crm_regs.h>
@@ -23,6 +26,7 @@
 #include <micrel.h>
 #include <miiphy.h>
 #include <netdev.h>
+#include "../common/trim.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -69,7 +73,7 @@ static iomux_v3_cfg_t const wdog_pads[] = {
 int mx6_rgmii_rework(struct phy_device *phydev)
 {
 	/*
-	 * Bug: Apparently uDoo does not works with Gigabit switches...
+	 * Bug: Apparently UDOO does not works with Gigabit switches...
 	 * Limiting speed to 10/100Mbps, and setting master mode, seems to
 	 * be the only way to have a successfull PHY auto negotiation.
 	 * How to fix: Understand why Linux kernel do not have this issue.
@@ -213,6 +217,54 @@ free_bus:
 	return ret;
 }
 
+
+#if defined(CONFIG_VIDEO_IPUV3)
+static void do_enable_hdmi(struct display_info_t const *dev)
+{
+	imx_enable_hdmi_phy();
+}
+
+struct display_info_t const displays[] = {{
+	.bus	= -1,
+	.addr	= 0,
+	.pixfmt	= IPU_PIX_FMT_RGB24,
+	.detect	= detect_hdmi,
+	.enable	= do_enable_hdmi,
+	.mode	= {
+		.name           = "HDMI",
+		.refresh        = 60,
+		.xres           = 1280,
+		.yres           = 720,
+		.pixclock       = 15385,
+		.left_margin    = 220,
+		.right_margin   = 40,
+		.upper_margin   = 21,
+		.lower_margin   = 7,
+		.hsync_len      = 60,
+		.vsync_len      = 10,
+		.sync           = FB_SYNC_EXT,
+		.vmode          = FB_VMODE_NONINTERLACED
+} } };
+size_t display_count = ARRAY_SIZE(displays);
+
+static void setup_display(void)
+{
+	struct mxc_ccm_reg *mxc_ccm = (struct mxc_ccm_reg *)CCM_BASE_ADDR;
+	int reg;
+
+	enable_ipu_clock();
+	imx_setup_hdmi();
+
+	reg = readl(&mxc_ccm->chsccdr);
+	reg |= (CHSCCDR_CLK_SEL_LDB_DI0
+		<< MXC_CCM_CHSCCDR_IPU1_DI0_CLK_SEL_OFFSET);
+	writel(reg, &mxc_ccm->chsccdr);
+}
+#endif /* CONFIG_VIDEO_IPUV3 */
+
+
+
+
 int board_mmc_init(bd_t *bis)
 {
 	SETUP_IOMUX_PADS(usdhc3_pads);
@@ -226,8 +278,21 @@ int board_early_init_f(void)
 {
 	setup_iomux_wdog();
 	setup_iomux_uart();
+	#if defined(CONFIG_VIDEO_IPUV3)
+		puts("setup_display();\n\n");
+		setup_display();
+	#endif
 
 	return 0;
+}
+
+/*
+ * Do not overwrite the console
+ * Use always serial for U-Boot console
+ */
+int overwrite_console(void)
+{
+	return 1;
 }
 
 int board_phy_config(struct phy_device *phydev)
@@ -265,9 +330,73 @@ int board_late_init(void)
 int checkboard(void)
 {
 	if (is_cpu_type(MXC_CPU_MX6Q))
-		puts("Board: Udoo Quad\n");
+		puts("Board: UDOO Quad\n");
 	else
-		puts("Board: Udoo DualLite\n");
+		puts("Board: UDOO DualLite\n");
 
 	return 0;
 }
+
+/**
+ * After loading uEnv.txt, we autodetect which fdt file we need to load.
+ * uEnv.txt can contain:
+ *  - video_output=hdmi|lvds7|lvds15
+ *    any other value (or if the variable is not specified) will default to "hdmi"
+ *  - use_custom_dtb=true|false
+ *    any other value (or if the variable is not specified) will default to "false"
+ * 
+ * Despite the signature, this command does not accept any argument.
+ */
+int do_udooinit(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+{
+	char* modelfdt;
+
+	if (is_cpu_type(MXC_CPU_MX6Q)) {
+		modelfdt = "imx6q-udoo";
+	} else {
+		modelfdt = "imx6dl-udoo";
+	}
+	
+	char* video_part = "-hdmi";
+	char* video = getenv("video_output");
+	
+	if (video) {
+		video = trim(video);
+		if (strcmp(video, "lvds7") == 0) {
+			video_part = "-lvds7";
+		} else if (strcmp(video, "lvds15") == 0) {
+			video_part = "-lvds15";
+		}
+	}
+	
+	char* actual_fdt = getenv("fdt_file");
+	if (actual_fdt) {
+		actual_fdt = trim(actual_fdt);
+		if (strcmp(actual_fdt, "autodetect") != 0) {
+			// if fdt_file is already set, do not overwrite it!
+			return 0;
+		}
+	}
+	
+	char* dir_part = "dts";
+	char* customdtb = getenv("use_custom_dtb");
+	if (customdtb) {
+		customdtb = trim(customdtb);
+		if (strcmp(customdtb, "true") == 0 || strcmp(customdtb, "yes") == 0 || strcmp(customdtb, "enabled") == 0) {
+			dir_part = "dts-overlay";
+		}
+	}
+	
+	char fdt_file[100];
+	sprintf(fdt_file, "/boot/%s/%s%s.dtb", dir_part, modelfdt, video_part);
+	
+	printf("Device Tree: %s\n", fdt_file);
+	setenv("fdt_file", fdt_file);
+	
+	return 0;
+}
+
+U_BOOT_CMD(
+	udooinit,	1,	1,	do_udooinit,
+	"(UDOO) determine the device tree to load", ""
+);

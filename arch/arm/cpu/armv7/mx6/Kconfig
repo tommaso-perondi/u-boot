@@ -168,8 +168,12 @@ config TARGET_TITANIUM
 config TARGET_TQMA6
 	bool "TQ Systems TQMa6 board"
 
-config TARGET_UDOO
-	bool "udoo"
+config TARGET_UDOO_QUAD_DUAL
+	bool "UDOO Quad/Dual"
+	select SUPPORT_SPL
+
+config TARGET_UDOO_NEO
+	bool "UDOO Neo"
 	select SUPPORT_SPL
 
 config TARGET_WANDBOARD
@@ -230,7 +234,8 @@ source "board/solidrun/mx6cuboxi/Kconfig"
 source "board/technexion/pico-imx6ul/Kconfig"
 source "board/tbs/tbs2910/Kconfig"
 source "board/tqc/tqma6/Kconfig"
-source "board/udoo/Kconfig"
+source "board/udoo/quad_dual/Kconfig"
+source "board/udoo/neo/Kconfig"
 source "board/wandboard/Kconfig"
 source "board/warp/Kconfig"
 

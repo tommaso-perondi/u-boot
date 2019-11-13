@@ -1,7 +1,8 @@
 /*
  * Copyright (C) 2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2015 UDOO Team
  *
- * Configuration settings for Udoo board.
+ * Configuration settings for UDOO Quad/Dual board.
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -13,13 +14,14 @@
 
 #define CONFIG_SPL_LIBCOMMON_SUPPORT
 #define CONFIG_SPL_MMC_SUPPORT
+#define CONFIG_SPL_ENV_SUPPORT
 #include "imx6_spl.h"
 
 #define MACH_TYPE_UDOO		4800
 #define CONFIG_MACH_TYPE	MACH_TYPE_UDOO
 
 /* Size of malloc() pool */
-#define CONFIG_SYS_MALLOC_LEN		(2 * SZ_1M)
+#define CONFIG_SYS_MALLOC_LEN		(10 * SZ_1M)
 
 #define CONFIG_BOARD_EARLY_INIT_F
 #define CONFIG_BOARD_LATE_INIT
@@ -59,45 +61,62 @@
 
 /* MMC Configuration */
 #define CONFIG_SYS_FSL_ESDHC_ADDR	0
+#define CONFIG_SYS_MAX_FLASH_BANKS 1
+
+/* Framebuffer */
+#define CONFIG_VIDEO
+#define CONFIG_VIDEO_IPUV3
+#define CONFIG_CFB_CONSOLE
+#define CONFIG_VGA_AS_SINGLE_DEVICE
+#define CONFIG_SYS_CONSOLE_IS_IN_ENV
+#define CONFIG_SYS_CONSOLE_OVERWRITE_ROUTINE
+#define CONFIG_VIDEO_BMP_RLE8
+#define CONFIG_SPLASH_SCREEN
+#define CONFIG_SPLASH_SCREEN_ALIGN
+#define CONFIG_BMP_16BPP
+#define CONFIG_VIDEO_LOGO
+#define CONFIG_VIDEO_BMP_LOGO
+#define CONFIG_IPUV3_CLK 260000000
+#define CONFIG_CMD_HDMIDETECT
+#define CONFIG_IMX_HDMI
+#define CONFIG_IMX_VIDEO_SKIP
+
+
+#ifdef CONFIG_SATABOOT
+	#define UBOOT_DEVICE	"sata"
+	#define CONFIG_MMCROOT	"/dev/sda2"
+	#define SATA_INIT		"sata init;"
+#else
+	#define UBOOT_DEVICE	"mmc"
+	#define CONFIG_MMCROOT	"/dev/mmcblk0p2"
+	#define SATA_INIT		""
+#endif
 
 #define CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
 
 #define CONFIG_EXTRA_ENV_SETTINGS \
-	"script=boot.scr\0" \
-	"image=zImage\0" \
+	"script=uEnv.txt\0" \
+	"image=/boot/zImage\0" \
 	"console=ttymxc1\0" \
 	"splashpos=m,m\0" \
 	"fdt_high=0xffffffff\0" \
 	"initrd_high=0xffffffff\0" \
-	"fdt_file=undefined\0" \
+	"fdt_file=autodetect\0" \
 	"fdt_addr=0x18000000\0" \
 	"boot_fdt=try\0" \
 	"ip_dyn=yes\0" \
 	"mmcdev=0\0" \
-	"mmcpart=1\0" \
-	"mmcroot=/dev/mmcblk0p2 rootwait rw\0" \
-	"update_sd_firmware_filename=u-boot.imx\0" \
-	"update_sd_firmware=" \
-		"if test ${ip_dyn} = yes; then " \
-			"setenv get_cmd dhcp; " \
-		"else " \
-			"setenv get_cmd tftp; " \
-		"fi; " \
-		"if mmc dev ${mmcdev}; then "	\
-			"if ${get_cmd} ${update_sd_firmware_filename}; then " \
-				"setexpr fw_sz ${filesize} / 0x200; " \
-				"setexpr fw_sz ${fw_sz} + 1; "	\
-				"mmc write ${loadaddr} 0x2 ${fw_sz}; " \
-			"fi; "	\
-		"fi\0" \
-	"mmcargs=setenv bootargs console=${console},${baudrate} " \
-		"root=${mmcroot}\0" \
+	"mmcpart=2\0" \
+	"mmcrootfstype=ext4\0" \
+	"mmcroot=" CONFIG_MMCROOT " rootwait rw\0" \
+	"mmcargs=setenv bootargs console=${console},${baudrate} ${video} ${memory} " \
+		"root=${mmcroot} rootfstype=${mmcrootfstype} ahci_imx.hotplug=1\0" \
 	"loadbootscript=" \
-		"load mmc ${mmcdev}:${mmcpart} ${loadaddr} ${script};\0" \
+		"fatload " UBOOT_DEVICE " ${mmcdev}:1 ${loadaddr} ${script};\0" \
 	"bootscript=echo Running bootscript from mmc ...; " \
-		"source\0" \
-	"loadimage=load mmc ${mmcdev}:${mmcpart} ${loadaddr} ${image}\0" \
-	"loadfdt=load mmc ${mmcdev}:${mmcpart} ${fdt_addr} ${fdt_file}\0" \
+		"env import -t ${loadaddr} ${filesize};\0" \
+	"loadimage=ext2load " UBOOT_DEVICE " ${mmcdev}:${mmcpart} ${loadaddr} ${image}\0" \
+	"loadfdt=ext2load " UBOOT_DEVICE " ${mmcdev}:${mmcpart} ${fdt_addr} ${fdt_file}\0" \
 	"mmcboot=echo Booting from mmc ...; " \
 		"run mmcargs; " \
 		"if test ${boot_fdt} = yes || test ${boot_fdt} = try; then " \
@@ -136,27 +155,20 @@
 			"fi; " \
 		"else " \
 			"bootz; " \
-		"fi;\0" \
-		"findfdt=" \
-			"if test $board_rev = MX6Q ; then " \
-				"setenv fdt_file imx6q-udoo.dtb; fi; " \
-			"if test $board_rev = MX6DL ; then " \
-				"setenv fdt_file imx6dl-udoo.dtb; fi; " \
-			"if test $fdt_file = undefined; then " \
-				"echo WARNING: Could not determine dtb to use; fi; \0"
+		"fi;\0"
 
 #define CONFIG_BOOTCOMMAND \
-	   "run findfdt; " \
-	   "mmc dev ${mmcdev}; if mmc rescan; then " \
-		   "if run loadbootscript; then " \
-			   "run bootscript; " \
-		   "else " \
-			   "if run loadimage; then " \
-				   "run mmcboot; " \
-			   "else run netboot; " \
-			   "fi; " \
-		   "fi; " \
-	   "else run netboot; fi"
+		"mmc dev ${mmcdev}; " SATA_INIT \
+		"if mmc rescan; then " \
+			"if run loadbootscript; then " \
+				"run bootscript; " \
+			"fi; " \
+			"udooinit; " \
+			"if run loadimage; then " \
+				"run mmcboot; " \
+			"else run netboot; " \
+			"fi; " \
+		"else run netboot; fi"
 
 /* Print Buffer Size */
 #define CONFIG_SYS_PBSIZE (CONFIG_SYS_CBSIZE + sizeof(CONFIG_SYS_PROMPT) + 16)
